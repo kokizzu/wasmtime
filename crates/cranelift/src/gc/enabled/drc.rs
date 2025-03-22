@@ -291,7 +291,6 @@ fn emit_gc_raw_alloc(
     );
 
     let gc_ref = builder.func.dfg.first_result(call_inst);
-    let gc_ref = builder.ins().ireduce(ir::types::I32, gc_ref);
     builder.declare_value_needs_stack_map(gc_ref);
     gc_ref
 }
@@ -320,9 +319,10 @@ impl GcCompiler for DrcCompiler {
 
         // First, compute the array's total size from its base size, element
         // size, and length.
-        let size = emit_array_size(func_env, builder, &array_layout, init);
+        let len = init.len(&mut builder.cursor());
+        let size = emit_array_size(func_env, builder, &array_layout, len);
         let num_gc_refs = if array_layout.elems_are_gc_refs {
-            size
+            len
         } else {
             builder.ins().iconst(ir::types::I32, 0)
         };

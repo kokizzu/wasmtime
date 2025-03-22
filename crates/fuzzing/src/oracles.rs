@@ -246,13 +246,27 @@ pub fn instantiate_many(
     config: &generators::Config,
     commands: &[Command],
 ) {
+    log::debug!("instantiate_many: {commands:#?}");
+
     assert!(!config.module_config.config.allow_start_export);
 
     let engine = Engine::new(&config.to_wasmtime()).unwrap();
 
     let modules = modules
         .iter()
-        .filter_map(|bytes| compile_module(&engine, bytes, known_valid, config))
+        .enumerate()
+        .filter_map(
+            |(i, bytes)| match compile_module(&engine, bytes, known_valid, config) {
+                Some(m) => {
+                    log::debug!("successfully compiled module {i}");
+                    Some(m)
+                }
+                None => {
+                    log::debug!("failed to compile module {i}");
+                    None
+                }
+            },
+        )
         .collect::<Vec<_>>();
 
     // If no modules were valid, we're done
@@ -991,9 +1005,11 @@ impl Drop for HelperThread {
 /// arbitrary types and values.
 pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbitrary::Result<()> {
     use crate::generators::component_types;
-    use component_fuzz_util::{TestCase, Type, EXPORT_FUNCTION, IMPORT_FUNCTION, MAX_TYPE_DEPTH};
-    use component_test_util::FuncExt;
     use wasmtime::component::{Component, Linker, Val};
+    use wasmtime_test_util::component::FuncExt;
+    use wasmtime_test_util::component_fuzz::{
+        TestCase, Type, EXPORT_FUNCTION, IMPORT_FUNCTION, MAX_TYPE_DEPTH,
+    };
 
     crate::init_fuzzing();
 
@@ -1019,7 +1035,7 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
         encoding2: input.arbitrary()?,
     };
 
-    let mut config = component_test_util::config();
+    let mut config = wasmtime_test_util::component::config();
     config.debug_adapter_modules(input.arbitrary()?);
     let engine = Engine::new(&config).unwrap();
     let mut store = Store::new(&engine, (Vec::new(), None));
